@@ -1,6 +1,7 @@
+// Frontend: React (app.jsx)
 import React, { useState } from "react";
 
-export default function Home() {
+export default function App() {
   const [codigo, setCodigo] = useState("");
   const [tipo, setTipo] = useState("");
   const [detalle, setDetalle] = useState("");
@@ -78,3 +79,63 @@ export default function Home() {
     </div>
   );
 }
+
+// Backend: Node.js (api/enviar.js)
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const twilio = require('twilio');
+const router = express.Router();
+
+// Twilio config
+const accountSid = 'TU_ACCOUNT_SID';
+const authToken = 'TU_AUTH_TOKEN';
+const client = twilio(accountSid, authToken);
+const fromWhatsApp = 'whatsapp:+14155238886'; // Número de Twilio
+const toWhatsApp = 'whatsapp:+50374155626'; // Tu número de WhatsApp
+
+router.post('/enviar', async (req, res) => {
+  const { codigo, tipo, detalle } = req.body;
+  const fecha = new Date().toISOString();
+
+  const mensaje = `Solicitud ZiPrint\nCódigo: ${codigo || 'No proporcionado'}\nServicio: ${tipo}\nDetalle: ${detalle}\nFecha: ${fecha}`;
+
+  // Guardar como JSON
+  const registroJSON = {
+    codigo,
+    tipo,
+    detalle,
+    fecha,
+  };
+
+  const jsonPath = path.join(__dirname, 'solicitudes.json');
+  const txtPath = path.join(__dirname, 'solicitudes.txt');
+
+  try {
+    // Guardar en archivo .json
+    let data = [];
+    if (fs.existsSync(jsonPath)) {
+      const file = fs.readFileSync(jsonPath);
+      data = JSON.parse(file);
+    }
+    data.push(registroJSON);
+    fs.writeFileSync(jsonPath, JSON.stringify(data, null, 2));
+
+    // Guardar en archivo .txt
+    fs.appendFileSync(txtPath, `\n${mensaje}\n------------------------\n`);
+
+    // Enviar mensaje a WhatsApp
+    await client.messages.create({
+      from: fromWhatsApp,
+      to: toWhatsApp,
+      body: mensaje,
+    });
+
+    res.json({ message: 'Solicitud enviada con éxito.' });
+  } catch (error) {
+    console.error('Error al procesar la solicitud:', error);
+    res.status(500).json({ message: 'Error al enviar la solicitud.' });
+  }
+});
+
+module.exports = router;
